@@ -7,9 +7,12 @@ from openpyxl.utils import get_column_letter
 from io import BytesIO
 import matplotlib.pyplot as plt
 from matplotlib import rc
+import matplotlib.font_manager as fm
 
 # 한글 폰트 설정
-rc('font', family='Malgun Gothic')  # Windows 사용자는 'Malgun Gothic', Mac 사용자는 'AppleGothic'
+font_path = "C:/Windows/Fonts/malgun.ttf"  # Windows에서 Malgun Gothic 폰트 경로
+font_prop = fm.FontProperties(fname=font_path)
+rc('font', family=font_prop.get_name())
 
 # VLOOKUP 구현
 def vlookup(value, lookup_table, key_col, value_col):
