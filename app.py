@@ -120,10 +120,39 @@ def create_donut_chart(data, labels, title):
     return fig
 
 # Streamlit UI
+# 막대 차트 생성 함수
+# 가로 막대 차트 생성 함수
+# 가로 막대 차트 생성 함수 (높은 순서로 정렬)
+# 가로 막대 차트 생성 함수 (오름차순 정렬)
+def create_bar_chart(data, labels, title):
+    # 데이터를 오름차순으로 정렬
+    sorted_indices = sorted(range(len(data)), key=lambda i: data[i], reverse=False)
+    sorted_data = [data[i] for i in sorted_indices]
+    sorted_labels = [labels[i] for i in sorted_indices]
+
+    # 가로 막대 차트 생성
+    fig, ax = plt.subplots(figsize=(10, 6))
+    bars = ax.barh(sorted_labels, sorted_data, color=plt.cm.tab10.colors)
+
+    # 막대 옆에 값 표시
+    for bar in bars:
+        width = bar.get_width()
+        ax.text(width + 0.5, bar.get_y() + bar.get_height() / 2, f'{int(width)}', va='center', fontsize=10)
+
+    ax.set_title(title, fontproperties=font_prop)
+    ax.set_xlabel("판매량", fontproperties=font_prop)
+    ax.set_ylabel("공급지", fontproperties=font_prop)
+    plt.tight_layout()
+    return fig
+
+
+
+
+# Streamlit UI 수정
 def main():
     st.title("우체국 택배 데이터 처리")
 
-    original_file = st.file_uploader("원본 파일 업로드 (Excel)", type=["xlsm", "xlsx"])
+    original_file = st.file_uploader("원본 파일 업로드 (Excel)", type=["xlsm", "xlsx"], key="original_file")
     reference_file_path = "수기관리.xlsx"
 
     # 기본 수기관리 파일 생성
@@ -156,8 +185,26 @@ def main():
         st.metric("총 택배비", f"{total_cost:,} 원")
         st.metric("총 박스 수", f"{total_boxes} 개")
 
+        # 도넛 차트 생성 및 표시
         fig1 = create_donut_chart([identified_count, unidentified_count], ["식별된 박스", "식별되지 않은 박스"], "박스 식별 현황")
         st.pyplot(fig1)
+
+        # 공급사별 판매량 계산
+        supplier_sales = processed_df["공급지"].value_counts()
+        supplier_labels = supplier_sales.index.tolist()
+        supplier_values = supplier_sales.values.tolist()
+
+        # 데이터를 내림차순 정렬
+        sorted_indices = sorted(range(len(supplier_values)), key=lambda i: supplier_values[i], reverse=True)
+        sorted_labels = [supplier_labels[i] for i in sorted_indices]
+        sorted_values = [supplier_values[i] for i in sorted_indices]
+
+        # 가로 막대 차트 생성 및 표시
+        st.subheader("공급사별 판매량")
+        fig2 = create_bar_chart(sorted_values, sorted_labels, "공급사별 판매량")
+        st.pyplot(fig2)
+
+
 
 if __name__ == "__main__":
     main()
