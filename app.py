@@ -125,9 +125,10 @@ def create_donut_chart(data, labels, title):
 # 가로 막대 차트 생성 함수 (높은 순서로 정렬)
 # 가로 막대 차트 생성 함수 (오름차순 정렬)
 # 가로 막대 차트 생성 함수 (폰트 적용)
+# 가로 막대 차트 생성 함수 (오름차순 정렬)
 def create_bar_chart(data, labels, title):
-    # 데이터를 내림차순으로 정렬
-    sorted_indices = sorted(range(len(data)), key=lambda i: data[i], reverse=True)
+    # 데이터를 오름차순으로 정렬
+    sorted_indices = sorted(range(len(data)), key=lambda i: data[i], reverse=False)  # False는 반드시 대문자로!
     sorted_data = [data[i] for i in sorted_indices]
     sorted_labels = [labels[i] for i in sorted_indices]
 
@@ -154,6 +155,7 @@ def create_bar_chart(data, labels, title):
 
 
 
+
 # Streamlit UI 수정
 def main():
     st.title("우체국 택배 데이터 처리")
@@ -173,15 +175,66 @@ def main():
     with col1:
         st.subheader("박스 정보 수정")
         reference_box = st.data_editor(reference_box, key="박스 정보 수정")
+
     with col2:
         st.subheader("기본 비용 수정")
         reference_cost = st.data_editor(reference_cost, key="기본 비용 수정")
 
+    # 박스 추가 및 제거 기능 나란히 배치
+    st.markdown("### 박스 정보 관리")
+    col3, col4 = st.columns(2)
+    with col3:
+        st.markdown("#### 새로운 박스 추가")
+        new_box_name = st.text_input("박스 이름 입력")
+        new_box_price = st.number_input("박스 가격 입력 (VAT 포함)", min_value=0, step=1)
+
+        if st.button("박스 추가"):
+            if new_box_name and new_box_price > 0:
+                new_row = {"박스번호": new_box_name, "박스가격(VAT포함)": new_box_price}
+                reference_box = pd.concat([reference_box, pd.DataFrame([new_row])], ignore_index=True)
+                st.success(f"새로운 박스 '{new_box_name}' 추가 완료!")
+                # 저장
+                with pd.ExcelWriter(reference_file_path, engine="openpyxl") as writer:
+                    reference_box.to_excel(writer, sheet_name="박스 정보", index=False)
+                    reference_cost.to_excel(writer, sheet_name="기본비용", index=False)
+
+    with col4:
+        st.markdown("#### 기존 박스 제거")
+        box_to_remove = st.selectbox("제거할 박스 선택", reference_box["박스번호"].tolist())
+        if st.button("박스 제거"):
+            reference_box = reference_box[reference_box["박스번호"] != box_to_remove]
+            st.success(f"박스 '{box_to_remove}' 제거 완료!")
+            # 저장
+            with pd.ExcelWriter(reference_file_path, engine="openpyxl") as writer:
+                reference_box.to_excel(writer, sheet_name="박스 정보", index=False)
+                reference_cost.to_excel(writer, sheet_name="기본비용", index=False)
+
     if original_file:
         original_df = pd.read_excel(original_file, header=5)
         processed_df = process_file(original_df, reference_box, reference_cost)
+
+        # 박스 정보 변경 반영
+        processed_df["사용박스"] = original_df["상품명"].apply(
+            lambda x: extract_box_info(str(x), reference_box)
+        )
+        processed_df["식별가능박스가격"] = processed_df["사용박스"].apply(
+            lambda x: vlookup(x, reference_box, "박스번호", "박스가격(VAT포함)")
+        )
+        processed_df["식별불가능박스가격일괄300원적용"] = processed_df["사용박스"].apply(
+            lambda x: 0 if x in reference_box["박스번호"].values else 300
+        )
+
         st.dataframe(processed_df)
 
+        # 공급사별 택배비 계산
+        supplier_costs = processed_df.groupby("공급지")["(우체국택배)택배비+부자재+작업비+운반비등"].sum().reset_index()
+        supplier_costs.rename(columns={"공급지": "공급사", "(우체국택배)택배비+부자재+작업비+운반비등": "택배비 합계"}, inplace=True)
+
+        # 표로 표시
+        st.subheader("공급사별 택배비 합계")
+        st.dataframe(supplier_costs)
+
+        # 메트릭: 총 택배비와 총 상자 수
         total_cost = processed_df["(우체국택배)택배비+부자재+작업비+운반비등"].sum()
         box_usage = processed_df["사용박스"].value_counts()
         unidentified_count = processed_df[processed_df["사용박스"].isna()].shape[0]
@@ -192,23 +245,38 @@ def main():
         st.metric("총 박스 수", f"{total_boxes} 개")
 
         # 도넛 차트 생성 및 표시
-        fig1 = create_donut_chart([identified_count, unidentified_count], ["식별된 박스", "식별되지 않은 박스"], "박스 식별 현황")
-        st.pyplot(fig1)
+        st.subheader("박스 식별 현황")
+        col1, col2 = st.columns(2)
+
+        # 첫 번째 도넛 차트: 식별된 박스와 식별되지 않은 박스
+        with col1:
+            fig1 = create_donut_chart(
+                [identified_count, unidentified_count],
+                ["식별된 박스", "식별되지 않은 박스"],
+                "박스 식별 현황"
+            )
+            st.pyplot(fig1)
+
+        # 두 번째 도넛 차트: 식별된 박스 중 각 박스의 비율
+        with col2:
+            identified_box_counts = box_usage.dropna().values
+            identified_box_labels = box_usage.dropna().index
+            fig2 = create_donut_chart(
+                identified_box_counts,
+                identified_box_labels,
+                "식별된 박스 구성 비율"
+            )
+            st.pyplot(fig2)
 
         # 공급사별 판매량 계산
         supplier_sales = processed_df["공급지"].value_counts()
         supplier_labels = supplier_sales.index.tolist()
         supplier_values = supplier_sales.values.tolist()
 
-        # 데이터를 내림차순 정렬
-        sorted_indices = sorted(range(len(supplier_values)), key=lambda i: supplier_values[i], reverse=True)
-        sorted_labels = [supplier_labels[i] for i in sorted_indices]
-        sorted_values = [supplier_values[i] for i in sorted_indices]
-
         # 가로 막대 차트 생성 및 표시
         st.subheader("공급사별 판매량")
-        fig2 = create_bar_chart(sorted_values, sorted_labels, "공급사별 판매량")
-        st.pyplot(fig2)
+        fig3 = create_bar_chart(supplier_values, supplier_labels, "공급사별 판매량 (오름차순)")
+        st.pyplot(fig3)
 
 
 
