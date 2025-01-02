@@ -124,9 +124,10 @@ def create_donut_chart(data, labels, title):
 # 가로 막대 차트 생성 함수
 # 가로 막대 차트 생성 함수 (높은 순서로 정렬)
 # 가로 막대 차트 생성 함수 (오름차순 정렬)
+# 가로 막대 차트 생성 함수 (폰트 적용)
 def create_bar_chart(data, labels, title):
-    # 데이터를 오름차순으로 정렬
-    sorted_indices = sorted(range(len(data)), key=lambda i: data[i], reverse=False)
+    # 데이터를 내림차순으로 정렬
+    sorted_indices = sorted(range(len(data)), key=lambda i: data[i], reverse=True)
     sorted_data = [data[i] for i in sorted_indices]
     sorted_labels = [labels[i] for i in sorted_indices]
 
@@ -137,11 +138,16 @@ def create_bar_chart(data, labels, title):
     # 막대 옆에 값 표시
     for bar in bars:
         width = bar.get_width()
-        ax.text(width + 0.5, bar.get_y() + bar.get_height() / 2, f'{int(width)}', va='center', fontsize=10)
+        ax.text(width + 0.5, bar.get_y() + bar.get_height() / 2, f'{int(width)}', va='center', fontsize=10, fontproperties=font_prop)
 
+    # 제목과 축 레이블에 폰트 적용
     ax.set_title(title, fontproperties=font_prop)
     ax.set_xlabel("판매량", fontproperties=font_prop)
     ax.set_ylabel("공급지", fontproperties=font_prop)
+
+    # 축 라벨 폰트 적용
+    plt.xticks(fontproperties=font_prop)
+    plt.yticks(fontproperties=font_prop)
     plt.tight_layout()
     return fig
 
